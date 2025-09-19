@@ -91,9 +91,9 @@ func (s *admissionWebhookServer) Review(in *admissionv1.AdmissionRequest) *admis
 
 	if annotation != "" {
 		bytes, err := json.Marshal([]jsonpatch.JsonPatchOperation{
-			s.createInitContainerPatch(p, annotation, disableLocalDNSServer, spec.InitContainers),
+			//s.createInitContainerPatch(p, annotation, disableLocalDNSServer, spec.InitContainers),
 			s.createContainerPatch(p, annotation, disableLocalDNSServer, spec.Containers),
-			s.createVolumesPatch(p, spec.Volumes),
+			//s.createVolumesPatch(p, spec.Volumes),
 			s.createLabelPatch(p, podMetaPtr.Labels),
 		})
 		if err != nil {
@@ -282,7 +282,29 @@ func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalD
 		Add: []corev1.Capability{"NET_BIND_SERVICE"},
 	}
 
-	envVar := append(s.config.GetOrResolveEnvs(), corev1.EnvVar{Name: s.config.NSURLEnvName, Value: v}, getNodeNameEnvVar())
+	//envVar := append(s.config.GetOrResolveEnvs(), corev1.EnvVar{Name: s.config.NSURLEnvName, Value: v}, getNodeNameEnvVar())
+	envVar := append([]corev1.EnvVar{
+		{
+			Name: "MY_POD_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.name",
+				},
+			},
+		},
+		{
+			Name: "MY_POD_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: "metadata.namespace",
+				},
+			},
+		},
+		{
+			Name:  "NETNS_SERVER_ADDR",
+			Value: "nsc-init-svc.kubeslice-system.svc.cluster.local:50052",
+		},
+	})
 	if disableLocalDNSServer {
 		envVar = append(envVar, corev1.EnvVar{Name: "NSM_LOCALDNSSERVERENABLED", Value: "false"})
 	}
@@ -292,7 +314,7 @@ func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalD
 			Name:            nameOf(img),
 			Env:             envVar,
 			Image:           img,
-			ImagePullPolicy: corev1.PullIfNotPresent,
+			ImagePullPolicy: corev1.PullAlways,
 			SecurityContext: &corev1.SecurityContext{
 				Privileged:   &privileged,
 				Capabilities: &capabilities,
@@ -301,7 +323,7 @@ func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalD
 				RunAsNonRoot: &runAsNonRoot,
 			},
 		})
-		s.addVolumeMounts(&containers[len(containers)-1])
+		//s.addVolumeMounts(&containers[len(containers)-1])
 		s.addDefaultResourceRequest(&containers[len(containers)-1])
 	}
 	return jsonpatch.NewOperation("add", path.Join(p, "spec", "containers"), containers)
