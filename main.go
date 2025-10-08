@@ -181,17 +181,7 @@ func (s *admissionWebhookServer) postProcessPodMeta(podMetaPtr, metaPtr *v1.Obje
 }
 
 func (s *admissionWebhookServer) createVolumesPatch(p string, volumes []corev1.Volume) jsonpatch.JsonPatchOperation {
-	readOnly := true
 	volumes = append(volumes,
-		corev1.Volume{
-			Name: "spire-agent-socket",
-			VolumeSource: corev1.VolumeSource{
-				CSI: &corev1.CSIVolumeSource{
-					Driver:   "csi.spiffe.io",
-					ReadOnly: &readOnly,
-				},
-			},
-		},
 		corev1.Volume{
 			Name: "nsm-dns-config",
 			VolumeSource: corev1.VolumeSource{
@@ -330,10 +320,6 @@ func (s *admissionWebhookServer) addDefaultResourceRequest(c *corev1.Container) 
 
 func (s *admissionWebhookServer) addVolumeMounts(c *corev1.Container) {
 	c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
-		Name:      "spire-agent-socket",
-		MountPath: "/run/spire/sockets",
-		ReadOnly:  true,
-	}, corev1.VolumeMount{
 		Name:      "nsm-dns-config",
 		MountPath: "/etc/nsm-dns-config",
 		ReadOnly:  false,
