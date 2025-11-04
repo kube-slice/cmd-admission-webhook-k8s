@@ -267,12 +267,6 @@ func (s *admissionWebhookServer) createInitContainerPatch(p, v string, disableLo
 }
 
 func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalDNSServer bool, containers []corev1.Container) jsonpatch.JsonPatchOperation {
-	var runAsNonRoot bool = false
-	var runAsUser int64 = 0
-	var runAsGroup int64 = 0
-	var privileged bool = false
-	// in case of openshift cluster PROFILE_OPENSHIFT will be set as true
-	privileged, _ = strconv.ParseBool(os.Getenv("PROFILE_OPENSHIFT"))
 
 	envVar := append(s.config.GetOrResolveEnvs(), corev1.EnvVar{Name: s.config.NSURLEnvName, Value: v}, getNodeNameEnvVar())
 	envVar = append(envVar, corev1.EnvVar{Name: "MY_POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
@@ -280,6 +274,7 @@ func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalD
 			FieldPath: "metadata.namespace",
 		},
 	}})
+	envVar = append(envVar, corev1.EnvVar{Name: "NSC_GRPC_SERVER_ADDR", Value: os.Getenv("NSC_GRPC_SERVER_ADDR")})
 	if disableLocalDNSServer {
 		envVar = append(envVar, corev1.EnvVar{Name: "NSM_LOCALDNSSERVERENABLED", Value: "false"})
 	}
@@ -290,12 +285,6 @@ func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalD
 			Env:             envVar,
 			Image:           img,
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			SecurityContext: &corev1.SecurityContext{
-				Privileged:   &privileged,
-				RunAsUser:    &runAsUser,
-				RunAsGroup:   &runAsGroup,
-				RunAsNonRoot: &runAsNonRoot,
-			},
 		})
 		s.addVolumeMounts(&containers[len(containers)-1])
 		s.addDefaultResourceRequest(&containers[len(containers)-1])
