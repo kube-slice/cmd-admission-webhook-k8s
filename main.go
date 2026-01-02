@@ -91,7 +91,7 @@ func (s *admissionWebhookServer) Review(in *admissionv1.AdmissionRequest) *admis
 
 	if annotation != "" {
 		bytes, err := json.Marshal([]jsonpatch.JsonPatchOperation{
-			s.createInitContainerPatch(p, annotation, disableLocalDNSServer, spec.InitContainers),
+			//s.createInitContainerPatch(p, annotation, disableLocalDNSServer, spec.InitContainers),
 			s.createContainerPatch(p, annotation, disableLocalDNSServer, spec.Containers),
 			s.createVolumesPatch(p, spec.Volumes),
 			s.createLabelPatch(p, podMetaPtr.Labels),
@@ -181,17 +181,7 @@ func (s *admissionWebhookServer) postProcessPodMeta(podMetaPtr, metaPtr *v1.Obje
 }
 
 func (s *admissionWebhookServer) createVolumesPatch(p string, volumes []corev1.Volume) jsonpatch.JsonPatchOperation {
-	readOnly := true
 	volumes = append(volumes,
-		corev1.Volume{
-			Name: "spire-agent-socket",
-			VolumeSource: corev1.VolumeSource{
-				CSI: &corev1.CSIVolumeSource{
-					Driver:   "csi.spiffe.io",
-					ReadOnly: &readOnly,
-				},
-			},
-		},
 		corev1.Volume{
 			Name: "nsm-dns-config",
 			VolumeSource: corev1.VolumeSource{
@@ -248,16 +238,21 @@ func (s *admissionWebhookServer) createInitContainerPatch(p, v string, disableLo
 	poolResources := parseResources(v, s.logger)
 
 	envVar := append(s.config.GetOrResolveEnvs(), corev1.EnvVar{Name: s.config.NSURLEnvName, Value: v}, getNodeNameEnvVar())
+	envVar = append(envVar, corev1.EnvVar{Name: "MY_POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
+		FieldRef: &corev1.ObjectFieldSelector{
+			FieldPath: "metadata.namespace",
+		},
+	}})
 	if disableLocalDNSServer {
 		envVar = append(envVar, corev1.EnvVar{Name: "NSM_LOCALDNSSERVERENABLED", Value: "false"})
 	}
 
 	for _, img := range s.config.InitContainerImages {
 		initContainers = append([]corev1.Container{{
-			Name:            nameOf(img),
+			Name:            "kubeslice-init",
 			Env:             envVar,
 			Image:           img,
-			ImagePullPolicy: corev1.PullIfNotPresent,
+			ImagePullPolicy: corev1.PullAlways,
 			SecurityContext: &corev1.SecurityContext{
 				Privileged:   &privileged,
 				RunAsUser:    &runAsUser,
@@ -272,17 +267,14 @@ func (s *admissionWebhookServer) createInitContainerPatch(p, v string, disableLo
 }
 
 func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalDNSServer bool, containers []corev1.Container) jsonpatch.JsonPatchOperation {
-	var runAsNonRoot bool = false
-	var runAsUser int64 = 0
-	var runAsGroup int64 = 0
-	var privileged bool = false
-	// in case of openshift cluster PROFILE_OPENSHIFT will be set as true
-	privileged, _ = strconv.ParseBool(os.Getenv("PROFILE_OPENSHIFT"))
-	capabilities := corev1.Capabilities{
-		Add: []corev1.Capability{"NET_BIND_SERVICE"},
-	}
 
 	envVar := append(s.config.GetOrResolveEnvs(), corev1.EnvVar{Name: s.config.NSURLEnvName, Value: v}, getNodeNameEnvVar())
+	envVar = append(envVar, corev1.EnvVar{Name: "MY_POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
+		FieldRef: &corev1.ObjectFieldSelector{
+			FieldPath: "metadata.namespace",
+		},
+	}})
+	envVar = append(envVar, corev1.EnvVar{Name: "NSC_GRPC_SERVER_ADDR", Value: os.Getenv("NSC_GRPC_SERVER_ADDR")})
 	if disableLocalDNSServer {
 		envVar = append(envVar, corev1.EnvVar{Name: "NSM_LOCALDNSSERVERENABLED", Value: "false"})
 	}
@@ -293,13 +285,6 @@ func (s *admissionWebhookServer) createContainerPatch(p, v string, disableLocalD
 			Env:             envVar,
 			Image:           img,
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			SecurityContext: &corev1.SecurityContext{
-				Privileged:   &privileged,
-				Capabilities: &capabilities,
-				RunAsUser:    &runAsUser,
-				RunAsGroup:   &runAsGroup,
-				RunAsNonRoot: &runAsNonRoot,
-			},
 		})
 		s.addVolumeMounts(&containers[len(containers)-1])
 		s.addDefaultResourceRequest(&containers[len(containers)-1])
@@ -330,10 +315,6 @@ func (s *admissionWebhookServer) addDefaultResourceRequest(c *corev1.Container) 
 
 func (s *admissionWebhookServer) addVolumeMounts(c *corev1.Container) {
 	c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
-		Name:      "spire-agent-socket",
-		MountPath: "/run/spire/sockets",
-		ReadOnly:  true,
-	}, corev1.VolumeMount{
 		Name:      "nsm-dns-config",
 		MountPath: "/etc/nsm-dns-config",
 		ReadOnly:  false,
