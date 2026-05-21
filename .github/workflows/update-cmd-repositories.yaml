@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Run `get-organization-repositories`
         id: organization-repositories
-        uses: denis-tingajkin/get-organization-repositories@v1
+        uses: denis-tingajkin/get-organization-repositories@df52cdc1d22077399f45569f58cb91e0a451b9e9 # v1
         with:
           github-organization: 'networkservicemesh'
           regex: 'cmd-.*'
@@ -28,14 +28,14 @@ jobs:
     if: github.repository == 'networkservicemesh/cmd-template'
     steps:
       - name: Checkout ${{ matrix.repository }}
-        uses: actions/checkout@v2
+        uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2
         with:
           path: ${{ matrix.repository }}
           repository: ${{ matrix.repository}}
           token: ${{ secrets.NSM_BOT_GITHUB_TOKEN }}
       - name: Sync config files
         if: matrix.repository != 'networkservicemesh/cmd-template'
-        uses: denis-tingajkin/sync-files@v1.0.2
+        uses: denis-tingajkin/sync-files@7cf3a71d4530214ecee324faf12cf884a275d366 # v1.0.2
         with:
           git-author-email: 'nsmbot@networkservicmesh.io'
           git-author-name: 'NSMBot'
